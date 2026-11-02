@@ -789,6 +789,68 @@ def cmd_check(a):
         print("  wrote %s" % os.path.join(a.dir, "fx-entry.json"))
 
 
+MAJORS_SCAN = ("EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD", "XAUUSD")
+
+
+def cmd_scan(a):
+    """The opening-range check on a list of markets in one go, triggered first, then nearest to a breakout."""
+    sess = _session_from(a)
+    now = parse_now(a.now, sess["tz"])
+    loc = to_local(now, sess["tz"])
+    day = loc.date().isoformat()
+    syms = [s.strip() for s in (a.symbols or ",".join(MAJORS_SCAN)).split(",") if s.strip()]
+    rows = []
+    for n, sym in enumerate(syms):
+        inst = instrument(sym)
+        try:
+            if a.csv_dir:
+                path = next((os.path.join(a.csv_dir, inst["symbol"] + ext) for ext in (".csv", ".csv.gz")
+                             if os.path.exists(os.path.join(a.csv_dir, inst["symbol"] + ext))), None)
+                if not path:
+                    raise FXError("no %s.csv in %s" % (inst["symbol"], a.csv_dir))
+                bars, cap = parse_csv(path, a.csv_tz), None
+            else:
+                if n:
+                    time.sleep(PAUSE)
+                text = fetch_yahoo(inst["yahoo"], "5d")
+                bars, meta = parse_yahoo(text, inst["yahoo"])
+                cap = meta.get("regularMarketTime")
+                cap = utc_of(cap) if isinstance(cap, (int, float)) else None
+        except FXError as e:
+            rows.append({"symbol": inst["symbol"], "status": "error", "reason": str(e)})
+            continue
+        as_of = min(now, cap) if cap else now
+        res = evaluate(sessionize(bars, sess, as_of).get(day, {}), sess, a.or_minutes, a.side, loc.hour * 60 + loc.minute)
+        res["symbol"] = inst["symbol"]
+        if "or_high" in res:
+            res["or_size"] = fmt_dist(inst, res["or_high"] - res["or_low"])
+            if "last" in res:
+                near = min(res["to_high"], res["to_low"])
+                res["nearest"] = near / (res["or_high"] - res["or_low"]) if res["or_high"] > res["or_low"] else None
+                res["near_text"] = "%s to the %s" % (fmt_dist(inst, near), "high" if res["to_high"] <= res["to_low"] else "low")
+        rows.append(res)
+    order = {"triggered": 0, "waiting": 1, "building": 2, "expired": 3, "not open": 4, "no data": 5, "error": 6}
+    rows.sort(key=lambda r: (order.get(r["status"], 9), r.get("nearest") if r.get("nearest") is not None else 9e9))
+    out = {"session": sess, "date": day, "now": loc.strftime("%Y-%m-%d %H:%M"), "rows": rows}
+    if a.write:
+        _write_json(os.path.join(a.dir, "fx-scan.json"), out)
+    if a.json:
+        print(json.dumps(out, indent=2))
+        return
+    print("Scan: %s (%s time %s), %d-minute opening range" % (session_label(sess), TZ_NAMES[sess["tz"]], out["now"],
+                                                             a.or_minutes))
+    for r in rows:
+        inst = instrument(r["symbol"])
+        if r["status"] == "triggered":
+            line = "TRIGGERED %s at %s on the %s close" % (r["side"].upper(), fmt_px(inst, r["entry"]), r["entry_time"])
+        elif r.get("near_text"):
+            line = "%s, %s" % (r["status"], r["near_text"])
+        else:
+            line = "%s: %s" % (r["status"], r.get("reason", ""))
+        print("  %-7s %-14s %s" % (r["symbol"], ("range " + r["or_size"]) if r.get("or_size") else "", line))
+    print("  Next for a triggered market: fx.py check SYMBOL --write, then plan, replay and size.")
+
+
 def cmd_plan(a):
     saved = {}
     if a.symbol:
@@ -846,7 +908,8 @@ def cmd_size(a):
     order = size_position(inst, plan, float(account), float(risk), float(pick("leverage", "leverage", 20.0)),
                           pick("step", "lot_step", None), a.quote_usd, float(pick("max_risk_pct", "max_risk_pct", 2.0)),
                           float(pick("min_rr", "min_reward_risk", 1.0)), a.spread)
-    order.update(type="bracket", placed=False, flat_by=plan.get("flat_by"))
+    order.update(type="bracket", placed=False, flat_by=plan.get("flat_by"),
+                 created_at=datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat())
     if a.write:
         _write_json(os.path.join(a.dir, "fx-order.json"), order)
     if a.json:
@@ -950,6 +1013,15 @@ def build_parser():
     q.add_argument("--json", action="store_true")
     sess_args(q)
     data_args(q)
+    q = sub.add_parser("scan")
+    q.add_argument("--symbols", help="comma-separated; default the majors plus XAUUSD")
+    q.add_argument("--side", choices=("buy", "sell", "both"), default="both")
+    q.add_argument("--now")
+    q.add_argument("--csv-dir", dest="csv_dir", help="a folder of <SYMBOL>.csv files instead of Yahoo")
+    q.add_argument("--csv-tz", dest="csv_tz", default="utc", choices=sorted(TZ))
+    q.add_argument("--write", action="store_true")
+    q.add_argument("--json", action="store_true")
+    sess_args(q)
     q = sub.add_parser("plan")
     q.add_argument("--symbol")
     q.add_argument("--side", choices=("buy", "sell", "both"))
@@ -996,7 +1068,8 @@ def main(argv=None):
         p.print_help()
         return 2
     try:
-        {"info": cmd_info, "check": cmd_check, "plan": cmd_plan, "size": cmd_size, "replay": cmd_replay}[a.cmd](a)
+        {"info": cmd_info, "check": cmd_check, "scan": cmd_scan, "plan": cmd_plan, "size": cmd_size,
+         "replay": cmd_replay}[a.cmd](a)
     except FXError as e:
         print("fx: %s" % e, file=sys.stderr)
         return 1

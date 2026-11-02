@@ -1,0 +1,25 @@
+{
+  "note": "Written by hand (or by Claude in the morning briefing) from the daily levels. Each setup is a plan, not a signal. Not financial advice.",
+  "setups": [
+    {"symbol": "XAUUSD", "side": "sell", "zone": [3985, 4000], "stop": 4065, "target": 3880,
+     "why": "Downtrend, below every average. Sell a rally into the broken July low and the round number.",
+     "trigger": "A rejection in the zone (a 5-minute close back below 3985 at the COMEX open).",
+     "invalidation": "A daily close above 4060, the last lower high."},
+    {"symbol": "XAGUSD", "side": "sell", "zone": [53.5, 54.3], "stop": 56.4, "target": 49.2,
+     "why": "Down 17% in 20 days and very oversold. Wait for a bounce into the late-October closes.",
+     "trigger": "A failed bounce in the zone.",
+     "invalidation": "A daily close above the 20-day average, near 56.3."},
+    {"symbol": "EURUSD", "side": "sell", "zone": [1.1255, 1.1275], "stop": 1.1315, "target": 1.1140,
+     "why": "Below the 50- and 100-day averages, inside a 1.1103 to 1.1276 range. Sell the top of the range.",
+     "trigger": "A rejection at the range high in the London session.",
+     "invalidation": "A daily close above 1.1300."},
+    {"symbol": "GBPUSD", "side": "buy", "zone": [1.3300, 1.3320], "stop": 1.3230, "target": 1.3440,
+     "why": "Short-term uptrend, above its averages, with a Bank of England decision on Thursday.",
+     "trigger": "A pullback to the 20-day average that holds.",
+     "invalidation": "A daily close below 1.3260."},
+    {"symbol": "USDJPY", "side": "buy", "zone": [156.10, 156.50], "stop": 155.50, "target": 158.40,
+     "why": "A 156 to 159 range for six weeks. Buy the bottom of it.",
+     "trigger": "A hold of 156 in the Tokyo or London session.",
+     "invalidation": "A daily close below 155.80."}
+  ]
+}

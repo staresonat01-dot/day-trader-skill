@@ -93,8 +93,13 @@ XAGUSD) and COMEX gold futures (GC, MGC):
 - **The Time Machine** for that session: 10,000 replays of the rest of the
   session plus the same rule on every past session.
 
-It never places an order. Yahoo has no spot gold, so XAUUSD reads COMEX
-futures (GC=F) unless you give your broker's bars with `--csv`.
+It never places an order on its own. `oanda.py` can send a sized ticket to an
+OANDA practice account (live only with `OANDA_ENV=live` and `--live`), and
+only after you type yes for that exact ticket. Yahoo has no spot gold, so
+XAUUSD reads COMEX futures (GC=F) unless you give your broker's bars with
+`--csv`. `fx.py scan` checks the majors and gold at the open in one go, and
+`watchlist.py` builds a daily watchlist and price alerts from Alpha Vantage
+data.
 
 ```bash
 python3 trader-fx/fx.py check EURUSD --session london --write   # waiting / triggered / expired
