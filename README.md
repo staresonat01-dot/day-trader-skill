@@ -73,6 +73,36 @@ or in the `SEC_USER_AGENT` environment variable.
 | `/trader-analyst` | Earnings Analyst | Reads earnings reports and sums up what changed. |
 | `/trader-pelosi` | Pelosi Tracker | Reads Congress's stock-trade disclosures the minute they are filed. |
 
+## Forex and gold: `/trader-fx`
+
+The eleven above are built for US stocks: one session from 9:30 to 4:00 New
+York time, whole shares, long only. `/trader-fx` runs the same chain for
+currency pairs (EURUSD, USDJPY, GBPJPY...), spot gold and silver (XAUUSD,
+XAGUSD) and COMEX gold futures (GC, MGC):
+
+- **Sessions in their own local time**: London 08:00 to 16:00, New York
+  08:00 to 16:00, Tokyo 09:00 to 15:00, COMEX gold 08:20 to 13:30, with
+  each city's daylight saving worked out from the date.
+- **Breakouts both ways**: the first 5-minute close above OR below the
+  opening range.
+- **Stops and targets in pips or dollars**, refused when tighter than three
+  spreads.
+- **Sizing in units, lots, ounces or contracts**, with the pip value
+  converted to dollars, the spread counted in the loss, and the margin at
+  your leverage.
+- **The Time Machine** for that session: 10,000 replays of the rest of the
+  session plus the same rule on every past session.
+
+It never places an order. Yahoo has no spot gold, so XAUUSD reads COMEX
+futures (GC=F) unless you give your broker's bars with `--csv`.
+
+```bash
+python3 trader-fx/fx.py check EURUSD --session london --write   # waiting / triggered / expired
+python3 trader-fx/fx.py plan --stop or-mid --target 1.5R --write # -> trader/fx-plan.json
+python3 trader-fx/fx.py replay --write                          # the Time Machine for this plan
+python3 trader-fx/fx.py size --account 5000 --risk 50 --write   # -> trader/fx-order.json, not placed
+```
+
 ## How to use it
 
 Everything lands in a `trader/` folder in your project, and each skill reads
