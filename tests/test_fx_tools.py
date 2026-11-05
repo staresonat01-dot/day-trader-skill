@@ -85,13 +85,17 @@ class Watchlist(unittest.TestCase):
             {"symbol": "EURUSD", "side": "buy", "zone": [1.1050, 1.1060], "stop": 1.1000, "target": 1.1200},
         ]})
 
-    def test_metal_dates_shift_back_one_trading_day(self):
+    def test_metal_values_keep_their_dates_and_weekends_drop(self):
         s = wl.read_series(os.path.join(self.raw, "xau_daily.csv"), "metal")
-        last = dict(s)
-        # the value dated Mon Nov 2 is absent; Sat Oct 31 and Sun Nov 1 both fold into Fri Oct 30 (the later wins)
-        self.assertEqual(s[-1][0], datetime.date(2026, 10, 30))
-        self.assertEqual(last[datetime.date(2026, 10, 30)], 4000 + (datetime.date(2026, 11, 1) - datetime.date(2026, 8, 3)).days)
+        self.assertEqual(s[-1], (datetime.date(2026, 10, 30), 4000 + (datetime.date(2026, 10, 30) - datetime.date(2026, 8, 3)).days))
         self.assertTrue(all(d.weekday() < 5 for d, _ in s))
+
+    def test_a_newest_metal_value_that_repeats_the_day_before_is_dropped(self):
+        path = os.path.join(self.tmp, "stale.csv")
+        put(path, "date,price\n2026-11-04,3938.2094\n2026-11-03,3938.2560\n2026-11-02,3947.9736\n")
+        self.assertEqual(wl.read_series(path, "metal")[-1][0], datetime.date(2026, 11, 3))
+        put(path, "date,price\n2026-11-04,4101.50\n2026-11-03,3938.2560\n")
+        self.assertEqual(wl.read_series(path, "metal")[-1], (datetime.date(2026, 11, 4), 4101.5))
 
     def test_build_writes_three_files_with_status(self):
         out = os.path.join(self.tmp, "out")

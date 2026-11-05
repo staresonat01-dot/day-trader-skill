@@ -1,25 +1,70 @@
 {
-  "note": "Written by hand (or by Claude in the morning briefing) from the daily levels. Each setup is a plan, not a signal. Not financial advice.",
-  "setups": [
-    {"symbol": "XAUUSD", "side": "sell", "zone": [3985, 4000], "stop": 4065, "target": 3880,
-     "why": "Downtrend, below every average. Sell a rally into the broken July low and the round number.",
-     "trigger": "A rejection in the zone (a 5-minute close back below 3985 at the COMEX open).",
-     "invalidation": "A daily close above 4060, the last lower high."},
-    {"symbol": "XAGUSD", "side": "sell", "zone": [53.5, 54.3], "stop": 56.4, "target": 49.2,
-     "why": "Down 17% in 20 days and very oversold. Wait for a bounce into the late-October closes.",
-     "trigger": "A failed bounce in the zone.",
-     "invalidation": "A daily close above the 20-day average, near 56.3."},
-    {"symbol": "EURUSD", "side": "sell", "zone": [1.1255, 1.1275], "stop": 1.1315, "target": 1.1140,
-     "why": "Below the 50- and 100-day averages, inside a 1.1103 to 1.1276 range. Sell the top of the range.",
-     "trigger": "A rejection at the range high in the London session.",
-     "invalidation": "A daily close above 1.1300."},
-    {"symbol": "GBPUSD", "side": "buy", "zone": [1.3300, 1.3320], "stop": 1.3230, "target": 1.3440,
-     "why": "Short-term uptrend, above its averages, with a Bank of England decision on Thursday.",
-     "trigger": "A pullback to the 20-day average that holds.",
-     "invalidation": "A daily close below 1.3260."},
-    {"symbol": "USDJPY", "side": "buy", "zone": [156.10, 156.50], "stop": 155.50, "target": 158.40,
-     "why": "A 156 to 159 range for six weeks. Buy the bottom of it.",
-     "trigger": "A hold of 156 in the Tokyo or London session.",
-     "invalidation": "A daily close below 155.80."}
-  ]
+ "note": "Written by hand (or by Claude in the morning briefing) from the daily levels. Each setup is a plan, not a signal. Not financial advice.",
+ "setups": [
+  {
+   "symbol": "XAUUSD",
+   "side": "buy",
+   "zone": [
+    4045,
+    4065
+   ],
+   "stop": 3985,
+   "target": 4190,
+   "why": "The midterm result broke gold's run of lower highs: it closed back above the late-October high near 4,060 as the dollar and yields fell. Buy a pullback to that broken level.",
+   "trigger": "A pullback that holds 4,045 to 4,065 and turns up at the COMEX open.",
+   "invalidation": "A daily close back below 4,000, under the old sell zone."
+  },
+  {
+   "symbol": "XAGUSD",
+   "side": "sell",
+   "zone": [
+    53.5,
+    54.3
+   ],
+   "stop": 56.4,
+   "target": 49.2,
+   "why": "Still below every average after a 17% fall; the midterm bounce runs into the late-October closes and the 20-day average near 54.8.",
+   "trigger": "A failed bounce in the zone.",
+   "invalidation": "A daily close above the 20-day average, near 55."
+  },
+  {
+   "symbol": "EURUSD",
+   "side": "sell",
+   "zone": [
+    1.1255,
+    1.1275
+   ],
+   "stop": 1.1315,
+   "target": 1.114,
+   "why": "At the top of its 1.1103 to 1.1276 range, but the dollar is falling after the midterms: take it only on a clear rejection.",
+   "trigger": "A rejection at the range high in the London session; skip it if Friday's jobs report is ahead of the trade.",
+   "invalidation": "A daily close above 1.1300."
+  },
+  {
+   "symbol": "GBPUSD",
+   "side": "buy",
+   "zone": [
+    1.34,
+    1.342
+   ],
+   "stop": 1.334,
+   "target": 1.355,
+   "why": "The strongest trend of the five, at a 20-day high with the Bank of England expected to raise rates today. Buy a pullback to the breakout area, not the high.",
+   "trigger": "A pullback to 1.3400 to 1.3420 that holds after the 12:00 UK decision.",
+   "invalidation": "A daily close below 1.3360."
+  },
+  {
+   "symbol": "USDJPY",
+   "side": "buy",
+   "zone": [
+    156.1,
+    156.5
+   ],
+   "stop": 155.5,
+   "target": 158.4,
+   "why": "Six weeks between 156 and 159. Buy the bottom of the range.",
+   "trigger": "A hold of 156 in the Tokyo or London session.",
+   "invalidation": "A daily close below 155.80."
+  }
+ ]
 }

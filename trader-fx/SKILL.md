@@ -131,8 +131,9 @@ python3 "${CLAUDE_SKILL_DIR}/oanda.py" place --confirm yes
 EURUSD, GBPUSD, USDJPY, the US 10-year yield) and `setups.json` into the
 rows a dashboard shows; `watchlist.py alerts --spot XAUUSD=3990` says which
 setups are in their zone, past their stop or at their target, once a day
-each. Alpha Vantage labels gold and silver one day late; `build` corrects
-it. Edit `setups.json` to change the plans: a sell needs target < zone <
+each. Alpha Vantage's newest gold and silver values are provisional and can
+repeat the day before; `build` drops such a repeat and uses the spot price
+for today. Edit `setups.json` to change the plans: a sell needs target < zone <
 stop, a buy stop < zone < target.
 
 ## What it reads and writes

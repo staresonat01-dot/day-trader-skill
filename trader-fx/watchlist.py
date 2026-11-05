@@ -12,8 +12,9 @@
 and writes three row files for the dashboard to OUT: markets.json (one row per market),
 history.json (the last 60 closes per market) and setups.json (each setup with its live status).
 
-Alpha Vantage labels each gold and silver value one day late: the value dated D is the close
-of the trading day before D (its Saturday value is Friday's close). `build` shifts them back.
+Alpha Vantage's newest gold and silver values are provisional: the latest one or two days can
+repeat the day before or carry a value that is revised later. `build` drops weekend values and a
+newest value that only repeats the day before (within 0.01%), and the spot price stands in for today.
 
 `alerts` compares spot prices with each setup's entry zone, stop and target and prints one
 line per alert that has not rung before (the state file remembers what rang, per day).
@@ -48,22 +49,18 @@ def parse_spot(text):
     return out
 
 
-def prev_weekday(d):
-    d -= dt.timedelta(days=1)
-    while d.weekday() >= 5:
-        d -= dt.timedelta(days=1)
-    return d
+STALE = 0.0001       # a newest metal value within 0.01% of the day before is a repeat, not a close
 
 
 def read_series(path, kind):
-    """[(date, close)] oldest first, weekdays only."""
+    """[(date, close)] oldest first, weekdays only. For metals, a newest value that only repeats
+    the previous trading day is dropped: Alpha Vantage posts it before the real close is in."""
     with open(path, encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.DictReader(fh))
     out = {}
     for r in rows:
         if kind == "metal":
             d, v = dt.date.fromisoformat(r["date"]), r["price"]
-            d = prev_weekday(d)              # Alpha Vantage's one-day-late label
         elif kind == "yield":
             d, v = dt.date.fromisoformat(r["timestamp"]), r["value"]
         else:
@@ -72,7 +69,10 @@ def read_series(path, kind):
             out[d] = float(v)
         except (TypeError, ValueError):
             continue                          # "." for a market holiday
-    return [(d, out[d]) for d in sorted(out) if d.weekday() < 5]
+    series = [(d, out[d]) for d in sorted(out) if d.weekday() < 5]
+    if kind == "metal" and len(series) > 1 and abs(series[-1][1] / series[-2][1] - 1) < STALE:
+        series = series[:-1]
+    return series
 
 
 def rsi(closes, k=14):
