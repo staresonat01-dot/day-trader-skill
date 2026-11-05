@@ -99,7 +99,8 @@ only after you type yes for that exact ticket. Yahoo has no spot gold, so
 XAUUSD reads COMEX futures (GC=F) unless you give your broker's bars with
 `--csv`. `fx.py scan` checks the majors and gold at the open in one go, and
 `watchlist.py` builds a daily watchlist and price alerts from Alpha Vantage
-data.
+data. `midpoint.py` tests the premium / discount midpoint rules against a
+random walk from the same starting points, on daily data or broker bars.
 
 ```bash
 python3 trader-fx/fx.py check EURUSD --session london --write   # waiting / triggered / expired

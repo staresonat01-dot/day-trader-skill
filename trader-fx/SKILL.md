@@ -136,6 +136,32 @@ repeat the day before; `build` drops such a repeat and uses the spot price
 for today. Edit `setups.json` to change the plans: a sell needs target < zone <
 stop, a buy stop < zone < target.
 
+## Testing a trading rule: the premium / discount midpoint
+
+`midpoint.py` turns three popular "smart money" rules into exact ones and
+tests them fairly: higher lows above a range's midpoint (expect a break up),
+lower highs below it (expect a break down), and a midpoint cross that fails
+its retest (a trap: expect a reversal).
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/midpoint.py" test xau_daily.csv             # daily gold, 15 years
+python3 "${CLAUDE_SKILL_DIR}/midpoint.py" test eurusd-5m.csv --range 48  # broker 5-minute bars
+python3 "${CLAUDE_SKILL_DIR}/midpoint.py" now xau_daily.csv --price 4126.26
+```
+
+- `test` says how often each rule broke the way it predicts, next to how
+  often a random walk from the same starting points would. Price high in a
+  range reaches the top first more often by chance alone, so a high hit
+  rate is not an edge; only beating that benchmark is. Say this plainly
+  when reading the results back.
+- `now` says which half price is in, how far up the range, and whether a
+  pattern is forming. Pass `--price` with the live price when the file's
+  last row is stale.
+- On 15 years of daily gold and silver (to November 2026) none of the three
+  rules beat chance with a 20-day range. Intraday has not been tested yet.
+- Any CSV with a time column and a close (or price) column works. Flags:
+  `--range`, `--window`, `--retest`, `--horizon`, `--gap`, `--json`.
+
 ## What it reads and writes
 
 | file | what |
