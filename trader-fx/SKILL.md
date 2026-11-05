@@ -163,12 +163,14 @@ python3 "${CLAUDE_SKILL_DIR}/midpoint.py" now xau_daily.csv --price 4126.26
   closes. It needs high and low columns (Alpha Vantage FX_DAILY or broker
   bars; its gold and silver history is closes only).
 - What it has found so far (daily data to November 2026, Wilson 95%):
-  closes only, none of the rules beat chance on gold, silver, EUR/USD or
-  GBP/USD. With `--wicks`, rule 1 beat chance on EUR/USD (95% up vs 81% by
-  chance, 57 events) and was ahead in 8 of 10 splits and settings across
-  EUR/USD and GBP/USD, but not significant in most of them; rules 2 and 3
-  showed nothing. Treat rule 1 with wicks as worth testing on other pairs
-  and on intraday bars, not as proven.
+  closes only, none of the rules beat chance on gold, silver or five
+  currency pairs. With `--wicks`, rule 1 beat chance on EUR/USD (95% up vs
+  81%), so it was tested on three pairs it had not seen: AUD/USD repeated
+  it (92% vs 82%), USD/JPY (80% vs 82%) and USD/CHF (71% vs 78%) did not.
+  Pooled over the three new pairs: 82.0% vs 80.8% by chance, no edge; all
+  five pairs: 83.8% vs 80.5%, no edge. Rules 2 and 3 showed nothing either.
+  Read back: no rule has a proven edge on daily data; an effect of a few
+  points cannot be ruled out, and intraday bars are still untested.
 - Any CSV with a time column and a close (or price) column works. Flags:
   `--range`, `--window`, `--retest`, `--horizon`, `--gap`, `--wicks`, `--json`.
 
