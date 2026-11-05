@@ -38,15 +38,20 @@ class Loading(unittest.TestCase):
         put(os.path.join(self.tmp, "m.csv"), "\n".join(rows) + "\n")
         s = mp.load(os.path.join(self.tmp, "m.csv"))
         self.assertEqual(s[0][0], "2026-01-01")
-        self.assertTrue(all(__import__("datetime").date.fromisoformat(t).weekday() < 5 for t, _ in s))
-        self.assertEqual([p for _, p in s], sorted(p for _, p in s))
+        self.assertTrue(all(__import__("datetime").date.fromisoformat(r[0]).weekday() < 5 for r in s))
+        self.assertEqual([r[1] for r in s], sorted(r[1] for r in s))
+        self.assertTrue(all(r[1] == r[2] == r[3] for r in s))          # no wicks: high and low are the close
+        with self.assertRaises(mp.MidError):                            # closes only: --wicks cannot work
+            mp.load(os.path.join(self.tmp, "m.csv"), wicks=True)
 
     def test_fx_daily_and_broker_bars(self):
         put(os.path.join(self.tmp, "fx.csv"), "timestamp,open,high,low,close\n" +
             "\n".join("2026-03-%02dT%02d:00:00Z,1,1,1,%.4f" % (1 + i // 24, i % 24, 1.1 + i / 1000) for i in range(40)) + "\n")
         s = mp.load(os.path.join(self.tmp, "fx.csv"))
         self.assertEqual(len(s), 40)                 # intraday rows are all kept, Sunday 1 March included
-        self.assertEqual(s[0], ("2026-03-01T00:00:00Z", 1.1))
+        self.assertEqual(s[0], ("2026-03-01T00:00:00Z", 1.1, 1.1, 1.1))
+        w = mp.load(os.path.join(self.tmp, "fx.csv"), wicks=True)
+        self.assertEqual(w[0], ("2026-03-01T00:00:00Z", 1.1, 1.1, 1.0))  # high 1 < close: widened to the close
         put(os.path.join(self.tmp, "bad.csv"), "when,open\n1,2\n")
         with self.assertRaises(mp.MidError):
             mp.load(os.path.join(self.tmp, "bad.csv"))
@@ -100,6 +105,35 @@ class Rules(unittest.TestCase):
         self.assertGreater(r["breaks"], 1000)
 
 
+class Wicks(unittest.TestCase):
+    P = [5, 10, 0, 10, 0, 6, 7, 8, 11]
+
+    def test_closes_only_matches_the_default(self):
+        self.assertEqual(mp.collect(self.P, rng=4, window=3, horizon=5, gap=1),
+                         mp.collect(self.P, rng=4, window=3, horizon=5, gap=1, H=list(self.P), L=list(self.P)))
+
+    def test_a_wick_into_the_discount_half_cancels_rule1(self):
+        L = list(self.P)
+        L[5] = 4.5                                   # the first window bar's low dips under the midpoint 5
+        g = mp.collect(self.P, rng=4, window=3, horizon=5, gap=1, H=list(self.P), L=L)
+        self.assertEqual(g["rule1"], [])
+
+    def test_wicks_widen_the_range_and_move_the_midpoint(self):
+        H = list(self.P)
+        H[1] = 12                                    # range 0-12, midpoint 6: the window low of 6 is not above it
+        g = mp.collect(self.P, rng=4, window=3, horizon=5, gap=1, H=H, L=list(self.P))
+        self.assertEqual(g["rule1"], [])
+        H[1] = 11                                    # midpoint 5.5: rule 1 again, the break at 11 is not a close above 11
+        g = mp.collect(self.P, rng=4, window=3, horizon=5, gap=1, H=H, L=list(self.P))
+        self.assertEqual(g["rule1"], [("none", 8 / 11)])
+
+    def test_state_now_with_wicks(self):
+        rows = [(t, p, p + 0.5, p - 0.5) for t, p in series([5, 10, 0, 10, 0, 6, 7, 8])]
+        s = mp.state_now(rows, rng=4, window=3, wicks=True)
+        self.assertEqual((s["range_low"], s["range_high"], s["midpoint"]), (-0.5, 10.5, 5))
+        self.assertTrue(any("lows above the midpoint" in p for p in s["patterns"]))
+
+
 class Now(unittest.TestCase):
     def test_zone_and_failed_retest(self):
         s = mp.state_now(series([10, 0, 10, 0, 4, 6, 4.5, 4]), rng=4, window=3, retest=2)
@@ -136,6 +170,9 @@ class Cli(unittest.TestCase):
         self.assertIn("above the range", out)
         code, out, err = run(["test", self.csv, "--json"])
         self.assertIn('"groups"', out)
+        code, _, err = run(["test", self.csv, "--wicks"])
+        self.assertEqual(code, 1)
+        self.assertIn("needs high and low columns", err)
 
     def test_bad_settings_and_files(self):
         self.assertEqual(run(["test", self.csv, "--range", "2"])[0], 2)

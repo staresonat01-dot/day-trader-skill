@@ -12,11 +12,12 @@ The rules, as popular "smart money" teaching states them:
   3. Failed midpoint retest (fakeout): price crosses the midpoint but closes back in the other half
      on the retest -> the cross was a trap, expect the move to reverse.
 
-How they are made exact here (closes only; change the numbers with the flags):
-  range      the highest and lowest close of the --range bars before the setup window; midpoint = their average
-  rule 1     the last --window closes all above the midpoint, inside the range, and the lowest close of the
-             window's second half above the lowest of its first half (rising lows)
-  rule 2     the mirror below the midpoint, with falling highs
+How they are made exact here (change the numbers with the flags):
+  range      the highest and lowest close of the --range bars before the setup window; midpoint = their average.
+             With --wicks: the highest high and lowest low instead, as the rules are usually drawn
+  rule 1     the last --window bars inside the range, their closes (with --wicks: their lows) all above the
+             midpoint, and the lowest of the window's second half above the lowest of its first half (rising lows)
+  rule 2     the mirror below the midpoint, with falling closes (with --wicks: falling highs)
   rule 3     a close crossing the midpoint, then a close back across it within --retest bars (failed) or
              not (held); judged --retest bars after the cross
   outcome    which edge breaks first: the first close beyond the range high or low within --horizon bars
@@ -27,8 +28,10 @@ first with probability f. Every group is compared with the average f of its own 
 "edge" is how much better the rule did than chance from the same spot. A 95% interval (Wilson) that
 clears the benchmark is flagged; with ~10 groups per run, one flag can be luck.
 
+Crosses (rule 3), breaks and the starting position always use closes: a wick through a level is not a close.
+
 Input: a CSV with a time column (date, time, timestamp or datetime) and a price column (close, price
-or value), any order, newest first or last. Date-only rows on Saturday or Sunday are dropped (Alpha
+or value), any order, newest first or last; --wicks also needs high and low columns. Date-only rows on Saturday or Sunday are dropped (Alpha
 Vantage's metal series repeats Friday there); intraday rows are all kept. Not financial advice.
 """
 
@@ -48,8 +51,8 @@ class MidError(Exception):
     pass
 
 
-def load(path):
-    """[(time text, close)] oldest first."""
+def load(path, wicks=False):
+    """[(time text, close, high, low)] oldest first. Without wicks, high and low are the close."""
     try:
         fh = open(path, encoding="utf-8-sig", newline="")
     except OSError as e:
@@ -64,11 +67,20 @@ def load(path):
     if not tcol or not pcol:
         raise MidError("%s needs a time column (%s) and a price column (%s)"
                        % (path, ", ".join(TIME_COLS), ", ".join(PRICE_COLS)))
+    hcol, lcol = keys.get("high"), keys.get("low")
+    if wicks and (not hcol or not lcol):
+        raise MidError("--wicks needs high and low columns, and %s has none (Alpha Vantage's gold and silver "
+                       "history is closes only; its FX_DAILY and your broker's bars have them)" % path)
     out = {}
     for r in rows:
         t = (r.get(tcol) or "").strip()
         try:
             p = float(r.get(pcol))
+            if wicks:
+                h, l = float(r.get(hcol)), float(r.get(lcol))
+                h, l = max(h, l, p), min(h, l, p)      # a bad row cannot put the close outside its own bar
+            else:
+                h = l = p
         except (TypeError, ValueError):
             continue                            # "." for a holiday, a blank line
         if len(t) == 10:
@@ -77,8 +89,8 @@ def load(path):
                     continue
             except ValueError:
                 pass
-        out[t] = p
-    series = sorted(out.items())
+        out[t] = (p, h, l)
+    series = [(t,) + v for t, v in sorted(out.items())]
     if len(series) < 30:
         raise MidError("%s has only %d usable rows" % (path, len(series)))
     return series
@@ -115,8 +127,12 @@ GROUPS = [
 ]
 
 
-def collect(P, rng=20, window=5, horizon=30, retest=2, gap=5):
-    """Every event as (break side, starting position 0..1 in the range), per group; one event per `gap` bars."""
+def collect(P, rng=20, window=5, horizon=30, retest=2, gap=5, H=None, L=None):
+    """Every event as (break side, starting position 0..1 in the range), per group; one event per `gap` bars.
+    P are closes; H and L the bars' highs and lows (default: the closes). The range and the rule 1 and 2
+    windows use H and L; crosses, breaks and the starting position use closes."""
+    H = P if H is None else H
+    L = P if L is None else L
     groups = {k: [] for k, _, _ in GROUPS}
     last = {k: -10 ** 9 for k in groups}
 
@@ -127,24 +143,23 @@ def collect(P, rng=20, window=5, horizon=30, retest=2, gap=5):
 
     half = window // 2
     for t in range(rng + window, len(P) - 1):
-        base = P[t - window - rng + 1:t - window + 1]
-        hi, lo = max(base), min(base)
+        a, b = t - window - rng + 1, t - window + 1
+        hi, lo = max(H[a:b]), min(L[a:b])
         if hi <= lo:
             continue
         m = (hi + lo) / 2
-        w = P[t - window + 1:t + 1]
-        if not all(lo <= x <= hi for x in w):
+        wh, wl = H[b:t + 1], L[b:t + 1]
+        if max(wh) > hi or min(wl) < lo:
             continue
         side, pos = first_break(P, t, hi, lo, horizon), (P[t] - lo) / (hi - lo)
         add("all", t, side, pos)
         add("above" if P[t] > m else "below", t, side, pos)
-        if all(x > m for x in w) and min(w[half:]) > min(w[:half + 1]):
+        if all(x > m for x in wl) and min(wl[half:]) > min(wl[:half + 1]):
             add("rule1", t, side, pos)
-        if all(x < m for x in w) and max(w[half:]) < max(w[:half + 1]):
+        if all(x < m for x in wh) and max(wh[half:]) < max(wh[:half + 1]):
             add("rule2", t, side, pos)
     for t in range(rng + 1, len(P) - retest - 1):
-        base = P[t - rng:t]
-        hi, lo = max(base), min(base)
+        hi, lo = max(H[t - rng:t]), min(L[t - rng:t])
         if hi <= lo or not lo <= P[t] <= hi:
             continue
         m = (hi + lo) / 2
@@ -177,21 +192,37 @@ def score(events, predicts):
             "predicts": predicts or "up", "none": len(events) - n}
 
 
+def columns(series):
+    """(times, closes, highs, lows) from rows of (time, close) or (time, close, high, low)."""
+    T = [r[0] for r in series]
+    P = [r[1] for r in series]
+    H = [r[2] if len(r) > 2 else r[1] for r in series]
+    L = [r[3] if len(r) > 3 else r[1] for r in series]
+    return T, P, H, L
+
+
+def label_for(label, wicks):
+    if not wicks:
+        return label
+    return label.replace("closes above mid", "lows above mid").replace("closes below mid", "highs below mid")
+
+
 def cmd_test(a):
-    series = load(a.csv)
-    P = [p for _, p in series]
-    groups = collect(P, a.range, a.window, a.horizon, a.retest, a.gap)
+    series = load(a.csv, a.wicks)
+    T, P, H, L = columns(series)
+    groups = collect(P, a.range, a.window, a.horizon, a.retest, a.gap, H, L)
     res = {k: score(groups[k], pred) for k, _, pred in GROUPS}
     if a.json:
-        print(json.dumps({"file": a.csv, "bars": len(P), "from": series[0][0], "to": series[-1][0],
+        print(json.dumps({"file": a.csv, "bars": len(P), "from": T[0], "to": T[-1],
                           "settings": vars(a), "groups": res}, indent=2, default=str))
         return
-    print("%s: %d bars, %s to %s" % (a.csv, len(P), series[0][0], series[-1][0]))
-    print("range %d bars, setup window %d, retest %d, outcome within %d bars, one event per %d bars"
-          % (a.range, a.window, a.retest, a.horizon, a.gap))
+    print("%s: %d bars, %s to %s" % (a.csv, len(P), T[0], T[-1]))
+    print("range %d bars from %s, setup window %d, retest %d, outcome within %d bars, one event per %d bars"
+          % (a.range, "highs and lows (wicks)" if a.wicks else "closes", a.window, a.retest, a.horizon, a.gap))
     print("%-49s %6s %10s %13s %8s %7s" % ("", "events", "right way", "95% interval", "chance", "edge"))
     for k, label, pred in GROUPS:
         r = res[k]
+        label = label_for(label, a.wicks)
         if not r.get("breaks"):
             print("%-49s %6d  (no breaks)" % (label, r["n"]))
             continue
@@ -205,52 +236,52 @@ def cmd_test(a):
     print("risk, not the hit rate. Not financial advice.")
 
 
-def state_now(series, rng=20, window=5, retest=2):
-    P = [p for _, p in series]
+def state_now(series, rng=20, window=5, retest=2, wicks=False):
+    T, P, H, L = columns(series)
     t = len(P) - 1
-    base = P[t - window - rng + 1:t - window + 1]
-    hi, lo = max(base), min(base)
+    a, b = t - window - rng + 1, t - window + 1
+    hi, lo = max(H[a:b]), min(L[a:b])
     m = (hi + lo) / 2
-    w = P[t - window + 1:t + 1]
+    wh, wl = H[b:t + 1], L[b:t + 1]
     half = window // 2
     x = P[t]
-    out = {"time": series[t][0], "price": x, "range_high": hi, "range_low": lo, "midpoint": m,
+    out = {"time": T[t], "price": x, "range_high": hi, "range_low": lo, "midpoint": m, "wicks": wicks,
            "position": (x - lo) / (hi - lo) if hi > lo else None,
            "zone": "above the range" if x > hi else "below the range" if x < lo else
            "in the premium half (above the midpoint)" if x > m else "in the discount half (below the midpoint)",
            "patterns": []}
-    if all(lo <= y <= hi for y in w):
-        if all(y > m for y in w) and min(w[half:]) > min(w[:half + 1]):
-            out["patterns"].append("rule 1: %d closes above the midpoint with rising lows" % window)
-        if all(y < m for y in w) and max(w[half:]) < max(w[:half + 1]):
-            out["patterns"].append("rule 2: %d closes below the midpoint with falling highs" % window)
+    what_low, what_high = ("lows", "highs") if wicks else ("closes", "closes")
+    if max(wh) <= hi and min(wl) >= lo:
+        if all(y > m for y in wl) and min(wl[half:]) > min(wl[:half + 1]):
+            out["patterns"].append("rule 1: %d bars' %s above the midpoint, rising" % (window, what_low))
+        if all(y < m for y in wh) and max(wh[half:]) < max(wh[:half + 1]):
+            out["patterns"].append("rule 2: %d bars' %s below the midpoint, falling" % (window, what_high))
     # a cross in the last `retest` bars, judged against the range before it
     for c in range(max(rng + 1, t - retest), t + 1):
-        b = P[c - rng:c]
-        h2, l2 = max(b), min(b)
+        h2, l2 = max(H[c - rng:c]), min(L[c - rng:c])
         m2 = (h2 + l2) / 2
         if P[c - 1] < m2 < P[c]:
             back = any(P[i] < m2 for i in range(c + 1, t + 1))
             out["patterns"].append("rule 3: crossed up through %.6g (the midpoint of the %d bars before it, %.6g to %.6g) at %s, %s" % (
-                m2, rng, l2, h2, series[c][0], "then closed back below (a failed retest)" if back else "holding above so far"))
+                m2, rng, l2, h2, T[c], "then closed back below (a failed retest)" if back else "holding above so far"))
         elif P[c - 1] > m2 > P[c]:
             back = any(P[i] > m2 for i in range(c + 1, t + 1))
             out["patterns"].append("rule 3: crossed down through %.6g (the midpoint of the %d bars before it, %.6g to %.6g) at %s, %s" % (
-                m2, rng, l2, h2, series[c][0], "then closed back above (a failed retest)" if back else "holding below so far"))
+                m2, rng, l2, h2, T[c], "then closed back above (a failed retest)" if back else "holding below so far"))
     return out
 
 
 def cmd_now(a):
-    series = load(a.csv)
+    series = load(a.csv, a.wicks)
     if a.price is not None:
-        series = series + [("now", a.price)]
-    s = state_now(series, a.range, a.window, a.retest)
+        series = series + [("now", a.price, a.price, a.price)]
+    s = state_now(series, a.range, a.window, a.retest, a.wicks)
     if a.json:
         print(json.dumps(s, indent=2))
         return
     print("%s, last close %.6g (%s)" % (a.csv, s["price"], s["time"]))
-    print("  range of the %d bars before the last %d: %.6g to %.6g, midpoint %.6g" % (
-        a.range, a.window, s["range_low"], s["range_high"], s["midpoint"]))
+    print("  range of the %d bars before the last %d (%s): %.6g to %.6g, midpoint %.6g" % (
+        a.range, a.window, "highs and lows" if a.wicks else "closes", s["range_low"], s["range_high"], s["midpoint"]))
     pos = s["position"]
     print("  price is %s%s" % (s["zone"], (", %.0f%% of the way up" % (100 * pos)) if pos is not None and 0 <= pos <= 1 else ""))
     for p in s["patterns"] or ["no midpoint pattern forming"]:
@@ -269,6 +300,8 @@ def main(argv=None):
         q.add_argument("--range", type=int, default=20, help="bars that set the range (20)")
         q.add_argument("--window", type=int, default=5, help="bars in the compression window (5)")
         q.add_argument("--retest", type=int, default=2, help="bars to judge a midpoint cross (2)")
+        q.add_argument("--wicks", action="store_true",
+                       help="build the range from the bars' highs and lows, as the rules are usually drawn")
         q.add_argument("--json", action="store_true")
         if name == "test":
             q.add_argument("--horizon", type=int, default=30, help="bars to wait for a break (30)")

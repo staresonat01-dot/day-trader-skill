@@ -157,10 +157,20 @@ python3 "${CLAUDE_SKILL_DIR}/midpoint.py" now xau_daily.csv --price 4126.26
 - `now` says which half price is in, how far up the range, and whether a
   pattern is forming. Pass `--price` with the live price when the file's
   last row is stale.
-- On 15 years of daily gold and silver (to November 2026) none of the three
-  rules beat chance with a 20-day range. Intraday has not been tested yet.
+- `--wicks` builds the range from the bars' highs and lows, as the rules
+  are usually drawn: rule 1 then asks for the bars' lows above the
+  midpoint, rule 2 for their highs below it. Crosses and breaks still count
+  closes. It needs high and low columns (Alpha Vantage FX_DAILY or broker
+  bars; its gold and silver history is closes only).
+- What it has found so far (daily data to November 2026, Wilson 95%):
+  closes only, none of the rules beat chance on gold, silver, EUR/USD or
+  GBP/USD. With `--wicks`, rule 1 beat chance on EUR/USD (95% up vs 81% by
+  chance, 57 events) and was ahead in 8 of 10 splits and settings across
+  EUR/USD and GBP/USD, but not significant in most of them; rules 2 and 3
+  showed nothing. Treat rule 1 with wicks as worth testing on other pairs
+  and on intraday bars, not as proven.
 - Any CSV with a time column and a close (or price) column works. Flags:
-  `--range`, `--window`, `--retest`, `--horizon`, `--gap`, `--json`.
+  `--range`, `--window`, `--retest`, `--horizon`, `--gap`, `--wicks`, `--json`.
 
 ## What it reads and writes
 
